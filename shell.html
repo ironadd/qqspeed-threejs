@@ -1,0 +1,78 @@
+<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="theme-color" content="#000">
+<title>QQ飞车 · 3D 极速漂移</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+html,body{margin:0;height:100%;overflow:hidden;background:#000;font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;color:#fff;touch-action:none}
+#game canvas{display:block;position:fixed;inset:0}
+#speedlines{position:fixed;inset:0;pointer-events:none;z-index:2}
+.ov{position:fixed;inset:0;z-index:10;display:none;flex-direction:column;align-items:center;justify-content:center;background:rgba(10,12,40,.55);backdrop-filter:blur(4px)}
+#menu{display:flex;background:linear-gradient(180deg,rgba(20,10,60,.35),rgba(10,10,40,.75))}
+h1{margin:0;font-size:clamp(28px,7vh,60px);font-style:italic;letter-spacing:2px;background:linear-gradient(90deg,#ffde3b,#ff5e8a,#5ef0ff);-webkit-background-clip:text;color:transparent;filter:drop-shadow(0 3px 0 rgba(0,0,0,.4))}
+.sub{opacity:.8;margin:2px 0 2vh;font-size:clamp(11px,2.4vh,16px)}
+.row{display:flex;gap:12px;align-items:center;margin:1vh 0;flex-wrap:wrap;justify-content:center}
+.card{width:clamp(130px,26vw,220px);height:clamp(70px,18vh,120px);border-radius:14px;padding:10px;display:flex;flex-direction:column;justify-content:flex-end;border:3px solid transparent;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.4);text-shadow:0 1px 3px #000}
+.card.sel{border-color:#ffde3b;transform:scale(1.05)}.card b{font-size:18px}.card small{opacity:.9}
+.sw{width:clamp(30px,8vh,46px);height:clamp(30px,8vh,46px);border-radius:50%;border:3px solid #fff3;cursor:pointer}.sw.sel{border-color:#ffde3b;transform:scale(1.15)}
+.btn{background:linear-gradient(180deg,#ffe25a,#ff9d1c);color:#4a2400;font-weight:900;border:none;border-radius:30px;padding:clamp(8px,2vh,14px) clamp(24px,5vw,44px);font-size:clamp(15px,3.4vh,22px);box-shadow:0 4px 0 #b05a00,0 6px 16px rgba(0,0,0,.4);cursor:pointer;margin:4px}
+.btn.s{background:linear-gradient(180deg,#6fd3ff,#2a7bff);color:#fff;box-shadow:0 4px 0 #1a4aa0;font-size:clamp(12px,2.6vh,16px);padding:8px 18px}
+.tips{font-size:clamp(10px,2vh,13px);opacity:.75;margin-top:1vh;text-align:center;line-height:1.5}
+#hud{display:none;position:fixed;inset:0;z-index:5;pointer-events:none}
+#hud .tl{position:absolute;left:calc(10px + env(safe-area-inset-left));top:8px;display:flex;gap:10px;align-items:flex-start}
+#rank{font-size:clamp(34px,10vh,64px);font-weight:900;font-style:italic;color:#ffde3b;text-shadow:0 3px 0 #a04000,0 0 12px #000;line-height:1}#rank small{font-size:.4em;color:#fff}
+.info{background:rgba(0,0,0,.4);border-radius:10px;padding:4px 10px;font-size:clamp(11px,2.6vh,16px);line-height:1.4}.info b{color:#5ef0ff}
+#minimap{position:absolute;right:calc(10px + env(safe-area-inset-right));top:8px;width:clamp(90px,26vh,170px);height:clamp(90px,26vh,170px);background:rgba(0,0,0,.25);border-radius:50%}
+#topbtns{position:absolute;top:8px;left:50%;transform:translateX(-50%);display:flex;gap:8px;pointer-events:auto}
+.ib{width:clamp(32px,8vh,42px);height:clamp(32px,8vh,42px);border-radius:50%;border:2px solid #fff8;background:rgba(0,0,0,.4);color:#fff;font-size:clamp(14px,3.5vh,20px);display:flex;align-items:center;justify-content:center;cursor:pointer}
+#fps{position:absolute;left:50%;top:calc(8px + 9vh);transform:translateX(-50%);font-size:10px;opacity:.5}
+#speedo{position:absolute;left:50%;bottom:6px;transform:translateX(-50%);width:clamp(110px,30vh,180px);height:clamp(70px,18vh,110px);text-align:center}
+#speedo .dial{position:absolute;left:50%;bottom:0;width:100%;aspect-ratio:1;transform:translateX(-50%) translateY(50%);border-radius:50%;background:radial-gradient(circle,rgba(0,0,0,.6) 55%,transparent 56%),conic-gradient(from -120deg,#5ef0ff,#ffde3b 50%,#ff3a6a 66%,transparent 66%);opacity:.85}
+#sneedle{position:absolute;left:50%;bottom:0;width:4px;height:45%;background:#ff3a6a;transform-origin:50% 100%;margin-left:-2px;border-radius:2px;transition:transform .08s}
+#speed{position:absolute;left:0;right:0;bottom:6px;font-size:clamp(20px,6vh,36px);font-weight:900;font-style:italic}#speedo span{position:absolute;left:0;right:0;bottom:-6px;font-size:10px;opacity:.7}
+#nitro{position:absolute;left:50%;bottom:calc(clamp(70px,18vh,110px) + 10px);transform:translateX(-50%);width:clamp(160px,40vw,320px);display:flex;gap:6px;align-items:center}
+#nwrap{flex:1;height:12px;border-radius:6px;background:rgba(0,0,0,.5);border:1px solid #fff6;overflow:hidden}#nbar{height:100%;width:0;background:linear-gradient(90deg,#2a7bff,#5ef0ff,#fff)}
+.nb{width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,.5);border:2px solid #5ef0ff66}.nb.on{background:radial-gradient(#fff,#5ef0ff);box-shadow:0 0 10px #5ef0ff}
+#itembox{position:absolute;right:calc(clamp(90px,26vh,170px) + 20px + env(safe-area-inset-right));top:10px;width:clamp(44px,12vh,64px);height:clamp(44px,12vh,64px);border-radius:12px;border:3px solid #fff8;background:rgba(0,0,0,.4);font-size:clamp(24px,7vh,40px);display:flex;align-items:center;justify-content:center}
+#flash{position:absolute;left:0;right:0;top:28%;text-align:center;font-size:clamp(18px,5.5vh,34px);font-weight:900;font-style:italic;color:#fff;text-shadow:0 0 10px #2a7bff,0 3px 0 #123;opacity:0}
+#flash.pop{animation:fl 1.4s}@keyframes fl{0%{opacity:0;transform:scale(.5)}15%{opacity:1;transform:scale(1.15)}30%{transform:scale(1)}80%{opacity:1}100%{opacity:0}}
+#count{position:fixed;left:0;right:0;top:30%;text-align:center;font-size:20vh;font-weight:900;font-style:italic;color:#ffde3b;text-shadow:0 6px 0 #a04000;z-index:6;opacity:0;pointer-events:none}
+#count.pop{animation:cd .9s forwards}#count.go{color:#5ef0ff;text-shadow:0 6px 0 #1a4aa0}@keyframes cd{0%{opacity:0;transform:scale(2)}20%{opacity:1;transform:scale(1)}80%{opacity:1}100%{opacity:0;transform:scale(.8)}}
+.ctl{position:absolute;pointer-events:auto;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;color:#fff;background:rgba(255,255,255,.14);border:3px solid rgba(255,255,255,.5);text-shadow:0 1px 3px #000;font-size:clamp(14px,4vh,22px);touch-action:none}
+.ctl.on{background:rgba(255,222,59,.45);transform:scale(.94)}
+#bL,#bR{width:clamp(64px,20vh,110px);height:clamp(64px,20vh,110px);bottom:calc(14px + env(safe-area-inset-bottom));font-size:clamp(26px,8vh,46px)}
+#bL{left:calc(14px + env(safe-area-inset-left))}#bR{left:calc(clamp(64px,20vh,110px) + 30px + env(safe-area-inset-left))}
+#bD{width:clamp(72px,23vh,124px);height:clamp(72px,23vh,124px);right:calc(14px + env(safe-area-inset-right));bottom:calc(14px + env(safe-area-inset-bottom));background:rgba(255,94,138,.3)}
+#bN{width:clamp(56px,17vh,92px);height:clamp(56px,17vh,92px);right:calc(clamp(72px,23vh,124px) + 26px);bottom:calc(14px + env(safe-area-inset-bottom));background:rgba(42,123,255,.3)}
+#bN.has{box-shadow:0 0 18px #5ef0ff;border-color:#5ef0ff}
+#bI{width:clamp(50px,15vh,80px);height:clamp(50px,15vh,80px);right:calc(clamp(72px,23vh,124px) + 10px);bottom:calc(clamp(72px,23vh,124px) + 24px)}#bI.has{box-shadow:0 0 18px #ffde3b;border-color:#ffde3b}
+#bB{width:clamp(44px,13vh,70px);height:clamp(44px,13vh,70px);right:calc(20px + env(safe-area-inset-right));bottom:calc(clamp(72px,23vh,124px) + 30px);font-size:clamp(11px,3vh,16px)}
+#results table{border-collapse:collapse;margin:1vh 0;font-size:clamp(12px,3vh,18px);background:rgba(0,0,0,.4);border-radius:10px}
+#results td{padding:4px 16px}#results tr.me{color:#ffde3b;font-weight:900}
+#rotate{position:fixed;inset:0;z-index:50;background:#0b0d2a;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:20px}
+#rotate .ph{width:60px;height:100px;border:4px solid #fff;border-radius:10px;animation:rot 2s infinite;margin-bottom:24px}@keyframes rot{0%,20%{transform:rotate(0)}50%,80%{transform:rotate(-90deg)}100%{transform:rotate(-90deg)}}
+@media (orientation:portrait) and (max-width:900px){#rotate{display:flex}}
+</style></head><body>
+<div id="game"></div><canvas id="speedlines"></canvas>
+<div id="hud">
+ <div class="tl"><div id="rank">1</div><div class="info">圈数 <b id="lap">1/3</b><br>时间 <b id="time">0:00.00</b><br><span id="best" style="opacity:.8;font-size:.85em"></span></div></div>
+ <div id="topbtns"><div class="ib" id="pausebtn">⏸</div><div class="ib" id="mutebtn">🔊</div><div class="ib" id="fsbtn">⛶</div></div><div id="fps"></div>
+ <div id="itembox"></div><canvas id="minimap" width="200" height="200"></canvas>
+ <div id="flash"></div>
+ <div id="nitro"><div id="nwrap"><div id="nbar"></div></div><div class="nb" id="n1"></div><div class="nb" id="n2"></div></div>
+ <div id="speedo"><div class="dial"></div><div id="sneedle"></div><div id="speed">0</div><span>km/h</span></div>
+ <div class="ctl" id="bL">◀</div><div class="ctl" id="bR">▶</div>
+ <div class="ctl" id="bD">漂移</div><div class="ctl" id="bN">氮气</div><div class="ctl" id="bI">道具</div><div class="ctl" id="bB">刹车</div>
+</div>
+<div id="count"></div>
+<div class="ov" id="menu"><h1>QQ飞车 · 极速漂移</h1><div class="sub">Three.js 3D 卡丁车 · 横屏游玩</div>
+ <div class="row" id="tracks"></div><div class="row" id="colors"></div>
+ <div class="row"><button class="btn" id="startbtn">开始比赛</button></div>
+ <div class="row"><button class="btn s" id="qbtn">画质</button><button class="btn s" id="mutebtn2">🔊</button><button class="btn s" id="fsbtn2">⛶ 全屏</button></div>
+ <div class="tips">按住漂移+方向过弯积攒氮气 · 松开漂移触发小喷 · 吃道具箱获得导弹/香蕉皮/护盾<br>键盘: ←→/AD 转向 · Shift 漂移 · 空格 氮气 · E 道具 · ↓/S 刹车 · P 暂停 · 倒计时按住↑起步加速</div></div>
+<div class="ov" id="pause"><h1>暂停</h1><div class="row"><button class="btn" id="resume">继续</button><button class="btn s" id="restart">重新开始</button><button class="btn s" id="tomenu">主菜单</button></div></div>
+<div class="ov" id="results"><h1 id="rtitle">完成!</h1><table><tbody id="rtable"></tbody></table><div id="rbest" class="tips"></div><div class="row"><button class="btn" id="again">再来一局</button><button class="btn s" id="tomenu2">主菜单</button></div></div>
+<div id="rotate"><div class="ph"></div>请将手机横屏游玩<br><small style="opacity:.6">Rotate your device to landscape</small></div>
+<script>/*THREE*/</script>
+<script>/*GAME*/</script>
+</body></html>
