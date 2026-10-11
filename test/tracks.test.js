@@ -105,6 +105,28 @@ for (let ti = 0; ti < QQ.TRACKS.length; ti++) {
   }
   lengths.push(Math.round(loop));
   assert.ok(maxY - minY > 4, def.name + ' flat ' + minY + '..' + maxY);
+  assert.strictEqual(tr.hw, QQ.HW, def.name + ' racing width');
+  const cum = [0];
+  for (let i = 0; i < n; i++) cum.push(cum[i] + Math.hypot(pts[(i + 1) % n].x - pts[i].x, pts[(i + 1) % n].z - pts[i].z));
+  const total = cum[n];
+  let straight = 0;
+  for (let i = 0; i < n; i++) {
+    if (Math.abs(pts[i].curv) >= 0.012) break;
+    straight += cum[i + 1] - cum[i];
+  }
+  assert.ok(straight >= 80, def.name + ' start straight ' + straight.toFixed(1) + 'm');
+  const roadW = tr.hw * 2;
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const fwd = cum[j] - cum[i];
+      const along = Math.min(fwd, total - fwd);
+      if (along <= 40) continue;
+      const nearSeam = function (k) { return Math.min(cum[k], total - cum[k]) < 15; };
+      if (nearSeam(i) && nearSeam(j)) continue;
+      const d = Math.hypot(pts[i].x - pts[j].x, pts[i].z - pts[j].z);
+      assert.ok(d >= roadW, def.name + ' racing line comes within ' + d.toFixed(1) + 'm at ' + along.toFixed(0) + 'm apart');
+    }
+  }
   const cls = analyze(pts);
   assert.ok(cls.hair, def.name + ' missing hairpin/U');
   assert.ok(cls.ess, def.name + ' missing S or opposite corners');

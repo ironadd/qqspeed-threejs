@@ -113,7 +113,7 @@
       goLeft: 0, startSpent: false,
       airborne: false, vy: 0, justLanded: false, lipLatch: false,
       ceiling: QQ.BASE_TOP,
-      prevAccel: false, prevNitro: false, prevDrift: false,
+      prevAccel: false, prevNitro: false, prevDrift: false, prevSpray: false,
       idx: idx, lat: 0, wallCd: 0, padCd: 0
     };
   };
@@ -143,7 +143,8 @@
     var driftIn = !!input.drift;
     var nitroIn = !!input.nitro;
     var brake = !!input.brake;
-    var accelEdge = accel && !k.prevAccel;
+    var sprayIn = !!input.spray;
+    var accelEdge = (accel && !k.prevAccel) || (sprayIn && !k.prevSpray);
     var nitroEdge = nitroIn && !k.prevNitro;
 
     if (input.go) k.goLeft = QQ.GO_WINDOW;
@@ -184,10 +185,6 @@
       k.yaw += yawRate * dt;
       var follow = (steerIn * k.driftDir < -0.2) ? 3.6 : 1.65;
       k.vyaw = lerpAngle(k.vyaw, k.yaw, Math.min(1, dt * follow));
-    } else {
-      var grip = clamp(k.speed / 14, 0, 1);
-      k.yaw += steerIn * 2.15 * grip * dt;
-      k.vyaw = lerpAngle(k.vyaw, k.yaw, Math.min(1, dt * 8));
     }
 
     if (accelEdge && k.sprayWindow > 0 && k.smallT <= 0) {
@@ -223,6 +220,11 @@
     }
     if (k.speed > capNow + 1e-8) k.speed = Math.max(capNow, k.speed - 30 * dt);
     if (k.speed < -8) k.speed = -8;
+    if (!k.drift) {
+      var grip = clamp(k.speed / 14, 0, 1);
+      k.yaw += steerIn * 2.15 * grip * dt;
+      k.vyaw = lerpAngle(k.vyaw, k.yaw, Math.min(1, dt * 8));
+    }
 
     if (k.drift && k.speed < 8) {
       k.drift = false;
@@ -314,81 +316,27 @@
     k.prevAccel = accel;
     k.prevNitro = nitroIn;
     k.prevDrift = driftIn;
+    k.prevSpray = sprayIn;
     return ev;
   };
 
   QQ.groundAt = groundAt;
 
-  function turtleTrack(cmds, map) {
-    var x = 0, z = 0, h = 0, s = 0;
-    var knots = [{ x: 0, z: 0, y: cmds[0].y0, r: 22 }];
-    function push(px, pz, py, r, jump) {
-      knots.push({ x: px, z: pz, y: py, r: r == null ? 16 : r, jump: jump ? 1 : 0 });
+  function knot(x, z, y, r, jump) {
+    return { x: x, z: z, y: y, r: r == null ? 16 : r, jump: jump ? 1 : 0 };
+  }
+  function arcKnots(cx, cz, radius, a0, a1, y0, y1, steps, fillet) {
+    var out = [];
+    for (var i = 0; i <= steps; i++) {
+      var t = i / steps;
+      var a = a0 + (a1 - a0) * t;
+      out.push(knot(cx + Math.cos(a) * radius, cz + Math.sin(a) * radius, y0 + (y1 - y0) * t, fillet || 12, false));
     }
-    for (var c = 0; c < cmds.length; c++) {
-      var cmd = cmds[c];
-      if (cmd.kind === 'straight') {
-        var n = Math.max(1, Math.round(cmd.len / 36));
-        for (var i = 1; i <= n; i++) {
-          var ds = cmd.len / n;
-          x += Math.cos(h) * ds;
-          z += Math.sin(h) * ds;
-          s += ds;
-          var jump = cmd.jump && i === Math.ceil(n / 2);
-          push(x, z, lerp(cmd.y0, cmd.y1, i / n), cmd.r || 20, jump);
-        }
-      } else {
-        var steps = Math.max(1, Math.round(Math.abs(cmd.angle) * cmd.radius / 16));
-        var da = cmd.angle / steps;
-        var stepLen = Math.abs(cmd.radius * da);
-        for (var j = 1; j <= steps; j++) {
-          x += Math.cos(h + da / 2) * stepLen;
-          z += Math.sin(h + da / 2) * stepLen;
-          h += da;
-          s += stepLen;
-          push(x, z, lerp(cmd.y0, cmd.y1, j / steps), Math.min(cmd.r || 14, cmd.radius * 0.45), false);
-        }
-      }
-    }
-    var dist = Math.hypot(x, z);
-    if (dist > 1) {
-      var want = Math.atan2(-z, -x);
-      var turn = Math.atan2(Math.sin(want - h), Math.cos(want - h));
-      var R = 28;
-      if (Math.abs(turn) > 0.2) {
-        var st = Math.max(2, Math.round(Math.abs(turn) * R / 16));
-        var da2 = turn / st;
-        var sl = Math.abs(R * da2);
-        for (var t = 1; t <= st; t++) {
-          x += Math.cos(h + da2 / 2) * sl;
-          z += Math.sin(h + da2 / 2) * sl;
-          h += da2;
-          push(x, z, cmds[0].y0 + 1, 16, false);
-        }
-      }
-      dist = Math.hypot(x, z);
-      var leave = Math.min(dist * 0.45, 70);
-      if (dist > leave + 8) {
-        var ux = -x / dist, uz = -z / dist;
-        var travel = dist - leave;
-        var m = Math.max(1, Math.round(travel / 40));
-        for (var u = 1; u <= m; u++) {
-          x += ux * travel / m;
-          z += uz * travel / m;
-          push(x, z, cmds[0].y0, 22, false);
-        }
-      }
-    }
-    if (map && map.mirror) {
-      for (var q = 0; q < knots.length; q++) knots[q].x *= -1;
-    }
-    if (map && map.shift) {
-      for (var q2 = 0; q2 < knots.length; q2++) {
-        knots[q2].x += map.shift[0];
-        knots[q2].z += map.shift[1];
-      }
-    }
-    return knots;
+    return out;
+  }
+  // U-turn that leaves the exit leg a full diameter away from the entry leg.
+  function hairpin(cx, cz, radius, y0, y1) {
+    return arcKnots(cx, cz, radius, Math.PI, 0.08, y0, y1, 8, Math.min(12, radius * 0.45));
   }
 
   function sampleLoop(knots) {
@@ -533,9 +481,7 @@
     return o;
   }
 
-  function makeTrack(meta, cmds, map) {
-    var knots = turtleTrack(cmds, map || {});
-    var sampled = null;
+  function makeTrack(meta, knots) {
     var def = {
       name: meta.name, sub: meta.sub, theme: meta.theme, type: meta.type,
       night: !!meta.night, snow: !!meta.snow, knots: knots,
@@ -547,51 +493,33 @@
     return def;
   }
 
-  var DEG = Math.PI / 180;
-  function cmdsBay() {
-    return [
-      { kind: 'straight', len: 210, y0: 2, y1: 3, jump: 1, r: 24 },
-      { kind: 'arc', radius: 20, angle: 90 * DEG, y0: 3, y1: 6, r: 14 },
-      { kind: 'straight', len: 36, y0: 6, y1: 8 },
-      { kind: 'arc', radius: 52, angle: 158 * DEG, y0: 8, y1: 15, r: 16 },
-      { kind: 'straight', len: 48, y0: 15, y1: 16 },
-      { kind: 'arc', radius: 15, angle: 168 * DEG, y0: 16, y1: 14, r: 11 },
-      { kind: 'straight', len: 34, y0: 14, y1: 10 },
-      { kind: 'arc', radius: 22, angle: 78 * DEG, y0: 10, y1: 8, r: 12 },
-      { kind: 'straight', len: 30, y0: 8, y1: 7 },
-      { kind: 'arc', radius: 22, angle: -78 * DEG, y0: 7, y1: 5, r: 12 },
-      { kind: 'straight', len: 56, y0: 5, y1: 2 }
-    ];
+  function bayKnots() {
+    // South straight is the closing edge, 460m. West leg, north U, inner leg, east sweep, forward S, then a perpendicular drop back onto the straight.
+    return [knot(0, 0, 2, 18)].concat(
+      [knot(0, 120, 3.5, 20), knot(0, 200, 6, 12, true), knot(0, 280, 9, 18)],
+      hairpin(30, 280, 30, 9, 14).slice(1),
+      [knot(60, 200, 12, 18), knot(60, 140, 10, 18), knot(170, 140, 9, 18)],
+      arcKnots(170, 78, 62, Math.PI / 2, Math.PI / 2 - 1.75, 9, 6, 8, 16).slice(1),
+      [knot(250, 70, 5, 16), knot(300, 42, 4, 16), knot(345, 74, 4, 16), knot(400, 46, 3, 18), knot(460, 0, 2, 18)]
+    );
   }
-  function cmdsDusk() {
-    return [
-      { kind: 'straight', len: 170, y0: 1, y1: 4, jump: 1, r: 22 },
-      { kind: 'arc', radius: 18, angle: 88 * DEG, y0: 4, y1: 9, r: 12 },
-      { kind: 'straight', len: 28, y0: 9, y1: 12 },
-      { kind: 'arc', radius: 60, angle: 150 * DEG, y0: 12, y1: 20, r: 16 },
-      { kind: 'straight', len: 42, y0: 20, y1: 22 },
-      { kind: 'arc', radius: 17, angle: 162 * DEG, y0: 22, y1: 16, r: 12 },
-      { kind: 'straight', len: 26, y0: 16, y1: 12 },
-      { kind: 'arc', radius: 14, angle: -100 * DEG, y0: 12, y1: 9, r: 11 },
-      { kind: 'straight', len: 32, y0: 9, y1: 6 },
-      { kind: 'arc', radius: 14, angle: 100 * DEG, y0: 6, y1: 3, r: 11 },
-      { kind: 'straight', len: 48, y0: 3, y1: 1 }
-    ];
+  function duskKnots() {
+    return [knot(40, -80, 1, 16)].concat(
+      [knot(40, 20, 5, 18), knot(40, 110, 9, 12, true), knot(40, 190, 14, 16)],
+      hairpin(64, 190, 24, 14, 20).slice(1),
+      [knot(88, 120, 16, 16), knot(88, 70, 13, 16), knot(180, 70, 11, 16)],
+      arcKnots(180, 40, 52, Math.PI / 2, Math.PI / 2 - 1.9, 11, 7, 8, 14).slice(1),
+      [knot(200, -8, 5, 20), knot(250, -28, 4, 20), knot(300, -8, 3, 18), knot(430, -28, 2, 18), knot(430, -80, 1, 16)]
+    );
   }
-  function cmdsSnow() {
-    return [
-      { kind: 'straight', len: 150, y0: 6, y1: 10, jump: 1, r: 20 },
-      { kind: 'arc', radius: 16, angle: 92 * DEG, y0: 10, y1: 16, r: 11 },
-      { kind: 'straight', len: 24, y0: 16, y1: 20 },
-      { kind: 'arc', radius: 40, angle: 172 * DEG, y0: 20, y1: 30, r: 14 },
-      { kind: 'straight', len: 36, y0: 30, y1: 28 },
-      { kind: 'arc', radius: 13, angle: -174 * DEG, y0: 28, y1: 18, r: 10 },
-      { kind: 'straight', len: 22, y0: 18, y1: 14 },
-      { kind: 'arc', radius: 18, angle: 86 * DEG, y0: 14, y1: 11, r: 11 },
-      { kind: 'straight', len: 26, y0: 11, y1: 9 },
-      { kind: 'arc', radius: 18, angle: -86 * DEG, y0: 9, y1: 7, r: 11 },
-      { kind: 'straight', len: 40, y0: 7, y1: 6 }
-    ];
+  function snowKnots() {
+    return [knot(-100, 40, 8, 16)].concat(
+      [knot(-100, 130, 14, 16), knot(-100, 210, 20, 12, true), knot(-100, 280, 24, 16)],
+      hairpin(-74, 280, 26, 24, 30).slice(1),
+      [knot(-48, 200, 26, 16), knot(-48, 130, 20, 16), knot(70, 130, 16, 16)],
+      arcKnots(70, 110, 50, Math.PI / 2, Math.PI / 2 - 1.85, 16, 12, 8, 14).slice(1),
+      [knot(112, 72, 13, 20), knot(165, 62, 11, 20), knot(220, 78, 10, 18), knot(250, 68, 9, 18), knot(250, 40, 8, 16)]
+    );
   }
 
   QQ.TRACKS = [
@@ -599,20 +527,20 @@
       name: '晴湾高架', sub: '海岸高架 · 日间都市', theme: 'bay-overpass', type: 'city',
       sky: ['#1565e0', '#8fd0ff', '#e6f6ff'], fog: '#cfe8ff', fogD: [220, 1400],
       sun: [0.45, 0.82, -0.3], sunC: '#fff3df', sunI: 3.3, hemi: ['#ffffff', '#90a878'], hemiI: 1.65,
-      ground: '#8fbe78', bh: [9, 42], clouds: true
-    }, cmdsBay(), {}),
+      ground: '#8fbe78', bh: [7, 16], clouds: true
+    }, bayKnots()),
     makeTrack({
       name: '暮色环线', sub: '霓虹丘陵 · 黄昏都市', theme: 'neon-ridge', type: 'city', night: true,
       sky: ['#241454', '#ff6fa8', '#ffc27a'], fog: '#7a4e86', fogD: [160, 1100],
       sun: [-0.55, 0.32, -0.45], sunC: '#ffb48a', sunI: 1.7, hemi: ['#c8b8ff', '#4a3a68'], hemiI: 1.85,
-      ground: '#3e3a52', bh: [14, 64], clouds: true
-    }, cmdsDusk(), { mirror: true, shift: [40, -30] }),
+      ground: '#3e3a52', bh: [8, 20], clouds: true
+    }, duskKnots()),
     makeTrack({
       name: '雪岭回环', sub: '高山雪道 · 跳台森林', theme: 'snow-ridge', type: 'snow', snow: true,
       sky: ['#4a78c0', '#a9cdf0', '#eef6ff'], fog: '#d5e4f2', fogD: [90, 900],
       sun: [-0.35, 0.62, -0.5], sunC: '#ffffff', sunI: 2.4, hemi: ['#e7f3ff', '#8090a4'], hemiI: 1.25,
       ground: '#e7eef4', bh: [8, 20], clouds: true
-    }, cmdsSnow(), { shift: [-80, 60] })
+    }, snowKnots())
   ];
 
   QQ.sampleTrack = function (def) {

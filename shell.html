@@ -45,9 +45,10 @@ h1{margin:0;font-size:clamp(28px,7vh,60px);font-style:italic;letter-spacing:2px;
 #bD{width:clamp(72px,23vh,124px);height:clamp(72px,23vh,124px);right:calc(14px + env(safe-area-inset-right));bottom:calc(14px + env(safe-area-inset-bottom));background:rgba(255,94,138,.3)}
 #bN{width:clamp(56px,17vh,92px);height:clamp(56px,17vh,92px);right:calc(clamp(72px,23vh,124px) + 26px);bottom:calc(14px + env(safe-area-inset-bottom));background:rgba(42,123,255,.3)}
 #bN.has{box-shadow:0 0 18px #5ef0ff;border-color:#5ef0ff}
-#bI{width:clamp(50px,15vh,80px);height:clamp(50px,15vh,80px);right:calc(clamp(72px,23vh,124px) + 10px);bottom:calc(clamp(72px,23vh,124px) + 24px)}#bI.has{box-shadow:0 0 18px #ffde3b;border-color:#ffde3b}
-#bB{width:clamp(44px,13vh,70px);height:clamp(44px,13vh,70px);right:calc(20px + env(safe-area-inset-right));bottom:calc(clamp(72px,23vh,124px) + 30px);font-size:clamp(11px,3vh,16px)}
-#bA{width:clamp(58px,16vh,92px);height:clamp(58px,16vh,92px);left:calc(14px + env(safe-area-inset-left));bottom:calc(clamp(64px,20vh,110px) + 22px + env(safe-area-inset-bottom));background:rgba(94,240,255,.28);font-size:clamp(13px,3.2vh,18px)}
+#bI.has{box-shadow:0 0 18px #ffde3b;border-color:#ffde3b}
+#bB{width:clamp(44px,13vh,70px);height:clamp(44px,13vh,70px);right:calc(clamp(72px,23vh,124px) + 26px + env(safe-area-inset-right));bottom:calc(clamp(56px,17vh,92px) + 22px + env(safe-area-inset-bottom));font-size:clamp(11px,3vh,16px)}
+#bI{width:clamp(50px,15vh,80px);height:clamp(50px,15vh,80px);right:calc(clamp(72px,23vh,124px) + clamp(56px,17vh,92px) + 40px + env(safe-area-inset-right));bottom:calc(clamp(56px,17vh,92px) + 10px + env(safe-area-inset-bottom))}
+#bW{width:clamp(58px,16vh,88px);height:clamp(58px,16vh,88px);right:calc(18px + env(safe-area-inset-right));bottom:calc(clamp(72px,23vh,124px) + 22px + env(safe-area-inset-bottom));background:rgba(255,210,60,.38);font-size:clamp(13px,3.4vh,18px)}
 #results table{border-collapse:collapse;margin:1vh 0;font-size:clamp(12px,3vh,18px);background:rgba(0,0,0,.4);border-radius:10px}
 #results td{padding:4px 16px}#results tr.me{color:#ffde3b;font-weight:900}
 #rotate{position:fixed;inset:0;z-index:50;background:#0b0d2a;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:20px}
@@ -62,15 +63,15 @@ h1{margin:0;font-size:clamp(28px,7vh,60px);font-style:italic;letter-spacing:2px;
  <div id="flash"></div>
  <div id="nitro"><div id="nwrap"><div id="nbar"></div></div><div class="nb" id="n1"></div><div class="nb" id="n2"></div></div>
  <div id="speedo"><div class="dial"></div><div id="sneedle"></div><div id="speed">0</div><span>km/h</span></div>
- <div class="ctl" id="bL">◀</div><div class="ctl" id="bR">▶</div><div class="ctl" id="bA">油门</div>
- <div class="ctl" id="bD">漂移</div><div class="ctl" id="bN">氮气</div><div class="ctl" id="bI">道具</div><div class="ctl" id="bB">刹车</div>
+ <div class="ctl" id="bL">◀</div><div class="ctl" id="bR">▶</div>
+ <div class="ctl" id="bD">漂移</div><div class="ctl" id="bW">小喷</div><div class="ctl" id="bN">氮气</div><div class="ctl" id="bI">道具</div><div class="ctl" id="bB">刹车</div>
 </div>
 <div id="count"></div>
 <div class="ov" id="menu"><h1>QQ飞车 · 极速漂移</h1><div class="sub">Three.js 3D 卡丁车 · 横屏游玩 · v3</div>
  <div class="row" id="tracks"></div><div class="row" id="colors"></div>
  <div class="row"><button class="btn" id="startbtn">开始比赛</button></div>
  <div class="row"><button class="btn s" id="qbtn">画质</button><button class="btn s" id="mutebtn2">🔊</button><button class="btn s" id="fsbtn2">⛶ 全屏</button></div>
- <div class="tips">按住油门加速 · 漂移+方向集气（最多 2 瓶）· 松开漂移后点油门小喷，再点一次双喷 · 空格/氮气与小喷叠加<br>键盘: ↑/W 油门 · ←→/AD 转向 · Shift 漂移 · 空格/N 氮气 · ↓/S 刹车 · E 道具 · P 暂停<br>GO 瞬间点油门起步喷 · 落地瞬间点油门落地喷 · 漂移中反打是侧身，快速反向再漂移是断位</div></div>
+ <div class="tips">前进是自动的，左手只转向 · 右手：漂移 / 小喷 / 氮气 / 刹车<br>松开漂移后点小喷，再点一次是双喷 · 氮气可与小喷叠加，最多 2 瓶<br>键盘: ←→/AD 转向 · Shift 漂移 · ↑/W 小喷 · 空格/N 氮气 · ↓/S 刹车 · E 道具 · P 暂停<br>GO 瞬间点小喷起步喷 · 落地瞬间点小喷落地喷 · 漂移反打是侧身 · 反向再点漂移是断位</div></div>
 <div class="ov" id="pause"><h1>暂停</h1><div class="row"><button class="btn" id="resume">继续</button><button class="btn s" id="restart">重新开始</button><button class="btn s" id="tomenu">主菜单</button></div></div>
 <div class="ov" id="results"><h1 id="rtitle">完成!</h1><table><tbody id="rtable"></tbody></table><div id="rbest" class="tips"></div><div class="row"><button class="btn" id="again">再来一局</button><button class="btn s" id="tomenu2">主菜单</button></div></div>
 <div id="rotate"><div class="ph"></div>请将手机横屏游玩<br><small style="opacity:.6">Rotate your device to landscape</small></div>

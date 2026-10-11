@@ -332,4 +332,41 @@ function nitroScenario(kind) {
   assert.ok(hit.after < hit.before * 0.97, hit.after + ' / ' + hit.before);
 }
 
+// One tick from rest with forward and steer both set moves and yaws.
+{
+  const k = fresh();
+  const y0 = k.yaw, x0 = k.x, z0 = k.z;
+  QQ.stepKart(k, { accel: 1, steer: 1 }, track, dt);
+  assert.ok(Math.hypot(k.x - x0, k.z - z0) > 0, 'did not advance');
+  assert.ok(Math.abs(k.yaw - y0) > 0, 'did not yaw');
+}
+
+// A forward hold already true at GO is not 起步喷. A 小喷 edge on that same hold is.
+{
+  const held = fresh();
+  QQ.stepKart(held, { accel: 1, steer: 0 }, track, dt);
+  const ev = QQ.stepKart(held, { accel: 1, go: true, steer: 0 }, track, dt);
+  assert.strictEqual(ev.start, false);
+  assert.strictEqual(held.startT, 0);
+  const tap = fresh();
+  QQ.stepKart(tap, { accel: 1, steer: 0 }, track, dt);
+  const ev2 = QQ.stepKart(tap, { accel: 1, go: true, spray: 1, steer: 0 }, track, dt);
+  assert.strictEqual(ev2.start, true);
+  assert.ok(tap.startT > 0);
+}
+
+// 小喷 and 双喷 still fire when forward stays held and only the spray control edges.
+{
+  const k = beginDrift(18);
+  QQ.stepKart(k, { accel: 1, steer: 0, drift: 0, spray: 0 }, track, dt);
+  assert.ok(k.sprayWindow > 0);
+  const ev = QQ.stepKart(k, { accel: 1, spray: 1, steer: 0 }, track, dt);
+  assert.strictEqual(ev.spray, true);
+  assert.strictEqual(k.sprays, 1);
+  QQ.stepKart(k, { accel: 1, spray: 0 }, track, dt);
+  const ev2 = QQ.stepKart(k, { accel: 1, spray: 1 }, track, dt);
+  assert.strictEqual(ev2.double, true);
+  assert.ok(k.ceiling > QQ.BASE_TOP + k.smallExtra);
+}
+
 console.log('drift tests passed');
