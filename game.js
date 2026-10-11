@@ -124,7 +124,7 @@ function buildTrack(def){
  // road ribbons
  const ribbon=(o0,o1,y0,y1,tex,uScale,mat,i0=0,i1=N)=>{ const pos=[],uv=[],idx=[]; let v=0;
    for(let i=i0;i<=i1;i++){ const j=i%N,p=P[j],s=SD[j],b=BK[j]; if(i>i0)v+=P[j].distanceTo(P[(i-1)%N])/uScale;
-     for(const [o,y,u] of [[o0,y0,0],[o1,y1,1]]){ pos.push(p.x+s.x*o, p.y+o*Math.sin(b)+y, p.z+s.z*o); uv.push(u,v);} 
+     for(let [o,y,u] of [[o0,y0,0],[o1,y1,1]]){ if(Math.abs(o)>HW+1.6){ let r=1e9; for(let q=-6;q<=6;q++)r=Math.min(r,1/Math.max(1e-5,Math.abs(curv[(j+q+N)%N]))); o=Math.sign(o)*Math.max(HW+1.6,Math.min(Math.abs(o),r*0.8)); } pos.push(p.x+s.x*o, p.y+o*Math.sin(b)+y, p.z+s.z*o); uv.push(u,v);} 
      if(i<i1){const k=(i-i0)*2; idx.push(k,k+1,k+2,k+1,k+3,k+2);} }
    const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2)); g.setIndex(idx); g.computeVertexNormals();
    const m=new THREE.Mesh(g,mat||new THREE.MeshStandardMaterial({map:tex,roughness:0.85,side:THREE.DoubleSide})); m.receiveShadow=true; scene.add(m); return m; };
@@ -504,6 +504,7 @@ function updateKart(k,dt){
   const target=MAXS*k.skill*rb*(1-clamp(Math.abs(c)*12,0,0.42)); accel=k.speed<target; brake=k.speed>target+8;
   drift=Math.abs(c)>0.018&&k.speed>18&&Math.abs(d)>0.18; if(drift) steer=Math.sign(d)||steer||1;
   if(racing&&k.bottles>0&&Math.abs(c)<0.008&&Math.random()<0.02) nitro=true;
+  if(!drift&&k.sprayWindow>0&&k.smallT<=0&&Math.random()<0.35*k.skill) spray=true;
   if(k.finished) accel=false;
   if(racing){ k.aiItemT-=dt; if(k.item&&k.aiItemT<0){ useItem(k); k.aiItemT=3+Math.random()*6; } }
  }
@@ -536,7 +537,7 @@ function updateKart(k,dt){
     for(let i=0;i<20;i++)sparks.emit(b.m.position.x,b.m.position.y,b.m.position.z,(Math.random()-0.5)*10,Math.random()*8,(Math.random()-0.5)*10,1,0.5,1,0.6); } }
  if(k.shield>0)k.shield-=dt;
  // model
- const m=k.m, ud=m.userData; m.position.copy(k.pos); m.rotation.set(0,k.yaw,0); m.rotateZ(-BK[a]*Math.cos(angDiff(k.yaw,Math.atan2(-TG[a].x,-TG[a].z))));
+ const m=k.m, ud=m.userData; poseKart(k,dt);
  ud.body.rotation.z=lerp(ud.body.rotation.z,-k.steer*0.04*k.speed/MAXS+(k.drift?k.driftDir*0.06:0),dt*6); ud.body.rotation.x=lerp(ud.body.rotation.x,(k.nitroT>0?-0.05:0)+(brake?0.03:0),dt*5);
  k.wspin+=k.speed*dt/0.48; ud.wheels.forEach(w=>w.rotation.x=-k.wspin); ud.steer.forEach(s=>s.rotation.y=k.steer*0.45+(k.drift?-k.driftDir*0.3:0)); ud.sw.rotation.z=k.steer*1.2;
  const bo=k.nitroT>0, jetOn=k.smallT>0||k.startT>0||k.landT>0||k.padT>0, fl=bo?1.6+Math.random()*0.8:jetOn?1.0+Math.random()*0.4:0.25+Math.random()*0.15*(accel?1:0);
@@ -552,6 +553,14 @@ function updateKart(k,dt){
    else k.lastW[w]=null; }
  if(offroad&&k.speed>10&&Math.random()<0.4)smoke.emit(k.pos.x,k.pos.y+0.3,k.pos.z,0,1,0,0.7,0.65,0.55,0.6);
 }
+function poseKart(k,dt,snap){ const m=k.m, n=N, fi=((k.idx%n)+n)%n, a=Math.floor(fi), f=fi-a, b2=(a+1)%n, sp=T.sim.spacing||2.5;
+ // 与 QQ.groundAt 同源：插值倾角 + 前后 4 点中心差分坡度，再做阻尼，车身不跟着采样点抖
+ const bank=lerp(BK[a],BK[b2],f); const yA=QQ.groundAt(T.sim,{idx:fi-2,lat:k.lat||0}).y, yB=QQ.groundAt(T.sim,{idx:fi+2,lat:k.lat||0}).y;
+ const tYaw=Math.atan2(-TG[a].x,-TG[a].z), rel=angDiff(k.yaw,tYaw);
+ let pitch=Math.atan2(yB-yA,4*sp)*Math.cos(rel), roll=-bank*Math.cos(rel)+Math.atan2(yB-yA,4*sp)*Math.sin(rel)*0;
+ if(k.airborne){ pitch=clamp((k.vy||0)*0.02,-0.25,0.25); }
+ const t=snap?1:clamp(dt*(k.airborne?3:9),0,1); k.pitchS=k.pitchS==null?pitch:lerp(k.pitchS,pitch,t); k.rollS=k.rollS==null?roll:lerp(k.rollS,roll,t);
+ m.position.copy(k.pos); m.rotation.set(k.pitchS,k.yaw,k.rollS,'YXZ'); }
 const angDiff=(a,b)=>Math.atan2(Math.sin(a-b),Math.cos(a-b)); const lerpAngle=(a,b,t)=>a-angDiff(a,b)*clamp(t,0,1);
 function kartCollisions(){ for(let i=0;i<karts.length;i++)for(let j=i+1;j<karts.length;j++){ const a=karts[i],b=karts[j]; const dx=b.pos.x-a.pos.x,dz=b.pos.z-a.pos.z,d=Math.hypot(dx,dz);
   if(d<3.2&&d>0.01){ const o=(3.2-d)/2, nx=dx/d,nz=dz/d; a.pos.x-=nx*o;a.pos.z-=nz*o;b.pos.x+=nx*o;b.pos.z+=nz*o; const s=(a.speed+b.speed)/2; a.speed=lerp(a.speed,s,0.3); b.speed=lerp(b.speed,s,0.3);
@@ -588,6 +597,7 @@ function showResults(){ G.state='results'; $('results').style.display='flex'; $(
 const camPos=new THREE.Vector3(), camLook=new THREE.Vector3(); let fps=60, fpsAcc=0, fpsN=0;
 function frame(){ requestAnimationFrame(frame); let dt=Math.min(clock.getDelta(),1/20); 
  fpsAcc+=dt;fpsN++; if(fpsAcc>0.5){fps=fpsN/fpsAcc; fpsAcc=0;fpsN=0; $('fps').textContent=Math.round(fps)+' FPS';}
+ if(G.state==='roam'){ roamFrame(dt); return; }
  if(G.state==='menu'){ if(G.menuKart){ const t=performance.now()/1000, k=G.menuKart; camera.position.set(k.position.x+Math.sin(t*0.3)*10,k.position.y+3.8,k.position.z+Math.cos(t*0.3)*9); camera.lookAt(k.position.x,k.position.y+1,k.position.z); k.userData.flames.forEach(f=>f.scale.y=0.3+Math.random()*0.2);
    T.sun.position.copy(k.position).addScaledVector(T.sunDir,100); T.sun.target.position.copy(k.position); T.sky.position.copy(camera.position); renderer.render(scene,camera);} return; }
  if(G.state==='paused'){ return; }
@@ -602,7 +612,7 @@ function frame(){ requestAnimationFrame(frame); let dt=Math.min(clock.getDelta()
  camPos.lerp(tgt,clamp(dt*(G.raceT<0.1&&G.state==='count'&&G.count>3.9?60:8),0,1)); if(camPos.lengthSq()===0)camPos.copy(tgt);
  camLook.copy(p.pos).addScaledVector(fw,5); camLook.y+=1.6; camera.position.copy(camPos);
  if(shake>0){ shake-=dt; camera.position.x+=(Math.random()-0.5)*shake*1.5; camera.position.y+=(Math.random()-0.5)*shake; }
- camera.lookAt(camLook); camera.fov=lerp(camera.fov,72+Math.min(p.speed,70)*0.12+boost*14,dt*4); camera.updateProjectionMatrix();
+ camera.lookAt(camLook); camera.fov=lerp(camera.fov,70+clamp(p.speed/QQ.BASE_TOP,0,1.4)*7+boost*8,dt*4); camera.updateProjectionMatrix();
  T.sun.position.copy(p.pos).addScaledVector(T.sunDir,120); T.sun.target.position.copy(p.pos).addScaledVector(fw,15); T.sky.position.copy(camera.position);
  if(T.snow){ const a=T.snow.geometry.attributes.position.array; for(let i=0;i<a.length;i+=3){ a[i+1]-=dt*4; a[i]+=Math.sin(i+performance.now()/900)*dt; if(a[i+1]<p.pos.y-5)a[i+1]+=50; } T.snow.position.set(Math.round(p.pos.x/120)*0,0,0); T.snow.geometry.attributes.position.needsUpdate=true;
    for(let i=0;i<a.length;i+=3){ if(a[i]-p.pos.x>60)a[i]-=120; else if(a[i]-p.pos.x<-60)a[i]+=120; if(a[i+2]-p.pos.z>60)a[i+2]-=120; else if(a[i+2]-p.pos.z<-60)a[i+2]+=120; } }
@@ -614,3 +624,15 @@ onResize(); applyQuality();
 if(Q.get('auto')){ G.track=+(Q.get('track')||0); newRace(); G.count=0.01; } else showMenu();
 frame();
 if(Q.get('auto')){ player.ai=true; player.skill=1.05; }
+
+// ===== debug free-roam fly-through: ?roam=1&track=N  (R key toggles in race) =====
+function roamPose(f){ const i=((f%N)+N)%N, a=Math.floor(i); const p=trackPos(i,0,new THREE.Vector3()), q=trackPos(i+10,0,new THREE.Vector3());
+ camera.position.set(p.x,p.y+(G.roamH||4),p.z); camera.lookAt(q.x,q.y+2,q.z); camera.fov=70; camera.updateProjectionMatrix();
+ if(player){ const k=player; const g=QQ.groundAt(T.sim,{idx:i+6,lat:0}); const pp=trackPos(i+6,0,new THREE.Vector3()); k.x=pp.x;k.z=pp.z;k.y=g.y;k.idx=(i+6)%N;k.lat=0;k.yaw=k.vyaw=Math.atan2(-TG[(a+6)%N].x,-TG[(a+6)%N].z); k.pos.set(k.x,k.y,k.z); poseKart(k,1/60,true); }
+ T.sun.position.copy(camera.position).addScaledVector(T.sunDir,120); T.sun.target.position.copy(camera.position); T.sky.position.copy(camera.position); }
+function roamFrame(dt){ if(!G.roamManual)G.roamIdx=(G.roamIdx||0)+dt*14; roamPose(G.roamIdx); renderer.render(scene,camera); }
+window.roamTo=function(f){ G.roamManual=true; G.roamIdx=f; roamPose(f); renderer.render(scene,camera); };
+window.roamLog=function(){ const out=[]; for(let i=0;i<N;i++){ const p=T.sim.pts[i]; const a=P[(i-1+N)%N],b=P[i],c=P[(i+1)%N]; const h=T.sim.spacing;
+  const nrm=new THREE.Vector3(0,1,0).applyAxisAngle(TG[i].clone().normalize(),-BK[i]); out.push({i,y:+b.y.toFixed(3),d2:+((a.y-2*b.y+c.y)/(h*h)).toFixed(4),bank:+BK[i].toFixed(3),n:[+nrm.x.toFixed(3),+nrm.y.toFixed(3),+nrm.z.toFixed(3)],gap:!!p.gap,lip:!!p.lip}); } return out; };
+addEventListener('keydown',e=>{ if(e.code==='KeyR'&&G.state==='race'){ G.state='roam'; G.roamIdx=player.idx; } else if(e.code==='KeyR'&&G.state==='roam'){ G.state='race'; } });
+if(Q.get('roam')){ G.track=+(Q.get('track')||0); newRace(); G.state='roam'; G.roamIdx=0; $('hud').style.display='none'; }

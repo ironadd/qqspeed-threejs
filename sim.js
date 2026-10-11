@@ -1,28 +1,43 @@
 /* QQ飞车竞速链与赛道采样。无 THREE、无 DOM、无 module。页面用经典 script 装上 window.QQ。 */
 (function (root) {
   var QQ = {};
-  QQ.BASE_TOP = 48;
+  QQ.BASE_TOP = 44;
   QQ.DRIFT_GAS = 0.12;
   QQ.FLOOR_GAS = 0.16;
-  QQ.NITRO_EXTRA = 22;
-  QQ.SMALL_LO = 7;
-  QQ.SMALL_HI = 16;
+  QQ.NITRO_EXTRA = 13;
+  QQ.SMALL_LO = 4;
+  QQ.SMALL_HI = 9;
   QQ.DOUBLE_MULT = 1.45;
   QQ.CW_FRAC = 0.3;
   QQ.CWW_FRAC = 0.8;
-  QQ.WALL_MUL = 0.62;
+  QQ.WALL_MUL = 0.55;
   QQ.BOTTLE_CAP = 2;
   QQ.SMALL_TIME = 2.2;
   QQ.NITRO_TIME = 2.4;
   QQ.WINDOW = 0.5;
   QQ.CUT = 0.3;
-  QQ.START_EXTRA = 13;
+  QQ.START_EXTRA = 8;
   QQ.START_TIME = 1.6;
-  QQ.LAND_EXTRA = 12;
+  QQ.LAND_EXTRA = 7;
   QQ.LAND_TIME = 1.4;
   QQ.GO_WINDOW = 0.18;
   QQ.HW = 8.5;
   QQ.SPACING = 2.5;
+  QQ.PAD_EXTRA = 6;
+  QQ.ACCEL = 15;          // m/s² 普通油门
+  QQ.BOOST_ACCEL = 28;    // m/s² 喷射时
+  QQ.STEER_CAP = 0.28;   // 满舵时极速上限降低 28%
+  QQ.STEER_SCRUB = 0.55;  // 普通转向掉速：每秒损失 speed*|steer|^1.5*系数
+  QQ.DRIFT_LONG = 1.6;    // 超过这个时长的漂移开始额外掉速
+  QQ.DRIFT_LONG_LOSS = 7; // m/s² 每多一秒
+  QQ.DRIFT_WIDE = 0.95;   // 超过这个滑移角（rad）算甩太开
+  QQ.DRIFT_WIDE_LOSS = 24;
+  QQ.WALL_SCRAPE = 14;    // 贴墙蹭行每秒掉速
+  QQ.DRIFT_WALL_MUL = 0.8;// 漂移撞墙额外乘
+  QQ.Y_SMOOTH = 8;
+  QQ.BANK_SMOOTH = 7;
+  QQ.BANK_GAIN = 7;
+  QQ.BANK_MAX = 0.26;
 
   function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
   function angDiff(a, b) { return Math.atan2(Math.sin(a - b), Math.cos(a - b)); }
@@ -43,7 +58,7 @@
     }
     if (k.startT > 0) extra = Math.max(extra, QQ.START_EXTRA);
     if (k.landT > 0) extra = Math.max(extra, QQ.LAND_EXTRA);
-    if (k.padT > 0) extra = Math.max(extra, 8);
+    if (k.padT > 0) extra = Math.max(extra, QQ.PAD_EXTRA);
     k.ceiling = QQ.BASE_TOP + extra;
     return k.ceiling;
   }
@@ -209,14 +224,22 @@
     var charging = k.drift;
     var before = k.speed;
     var slip = Math.abs(angDiff(k.yaw, k.vyaw));
-    if (k.drift) k.speed -= (2.4 + slip * 5) * dt;
+    if (k.drift) {
+      k.speed -= (2.4 + slip * 5) * dt;
+      if (k.driftT > QQ.DRIFT_LONG) k.speed -= (k.driftT - QQ.DRIFT_LONG) * QQ.DRIFT_LONG_LOSS * dt;
+      if (slip > QQ.DRIFT_WIDE) k.speed -= (slip - QQ.DRIFT_WIDE) * QQ.DRIFT_WIDE_LOSS * dt;
+    } else if (k.speed > 0) {
+      var sa = Math.abs(steerIn), grip0 = clamp(k.speed / 14, 0, 1);
+      k.speed -= k.speed * Math.pow(sa, 1.5) * QQ.STEER_SCRUB * grip0 * dt;
+    }
     if (brake) k.speed -= 40 * dt;
     else if (!accel) k.speed -= 5 * dt;
     var boosting = k.smallT > 0 || k.nitroT > 0 || k.startT > 0 || k.landT > 0 || k.padT > 0;
     if (accel && !brake) {
-      var rate = boosting ? 42 : 24;
-      if (k.speed < capNow) k.speed = Math.min(capNow, k.speed + rate * dt);
-      else k.speed = Math.max(capNow, k.speed - 16 * dt);
+      var rate = boosting ? QQ.BOOST_ACCEL : QQ.ACCEL;
+      var capEff = k.drift ? capNow : capNow * (1 - QQ.STEER_CAP * Math.pow(Math.abs(steerIn), 1.3) * clamp(k.speed / 20, 0, 1));
+      if (k.speed < capEff) k.speed = Math.min(capEff, k.speed + rate * dt);
+      else k.speed = Math.max(capEff, k.speed - 16 * dt);
     }
     if (k.speed > capNow + 1e-8) k.speed = Math.max(capNow, k.speed - 30 * dt);
     if (k.speed < -8) k.speed = -8;
@@ -259,8 +282,9 @@
       k.x -= s.sx * sgn * over;
       k.z -= s.sz * sgn * over;
       k.lat = sgn * hw;
+      if (k.speed > 0) k.speed = Math.max(0, k.speed - QQ.WALL_SCRAPE * dt);
       if (k.speed > 8 && k.wallCd <= 0) {
-        k.speed *= QQ.WALL_MUL;
+        k.speed *= QQ.WALL_MUL * (k.drift ? QQ.DRIFT_WALL_MUL : 1);
         k.wallCd = 0.4;
         ev.wall = true;
         k.drift = false;
@@ -339,6 +363,21 @@
     return arcKnots(cx, cz, radius, Math.PI, 0.08, y0, y1, 8, Math.min(12, radius * 0.45));
   }
 
+  function smoothLoop(arr, r, passes) {
+    var n = arr.length, cur = arr.slice();
+    for (var p = 0; p < passes; p++) {
+      var out = new Array(n), acc = 0;
+      for (var k = -r; k <= r; k++) acc += cur[((k % n) + n) % n];
+      for (var i = 0; i < n; i++) {
+        out[i] = acc / (2 * r + 1);
+        acc += cur[(i + r + 1) % n] - cur[((i - r) % n + n) % n];
+      }
+      cur = out;
+    }
+    return cur;
+  }
+  QQ.smoothLoop = smoothLoop;
+
   function sampleLoop(knots) {
     var nK = knots.length;
     var raw = [];
@@ -392,6 +431,9 @@
         gap: false, lip: false, pad: false, marker: 0, padLat: 0, bank: 0, curv: 0
       });
     }
+    // 低频起伏：高度做环形三次盒式平滑（≈高斯，σ≈20m），保证 C1/C2 连续，去掉段与段之间的折角
+    var ys = smoothLoop(pts.map(function (p) { return p.y; }), QQ.Y_SMOOTH, 3);
+    for (var iy = 0; iy < M; iy++) pts[iy].y = ys[iy];
     for (var i2 = 0; i2 < M; i2++) {
       var nxt = pts[(i2 + 1) % M], prv = pts[(i2 - 1 + M) % M];
       var tx = nxt.x - prv.x, tz = nxt.z - prv.z;
@@ -414,8 +456,12 @@
       for (var k2 = -3; k2 <= 3; k2++) acc += curv[(i4 + k2 + M) % M];
       sm[i4] = acc / 7;
       pts[i4].curv = sm[i4];
-      pts[i4].bank = clamp(-sm[i4] * 9, -0.42, 0.42);
     }
+    // 倾角用更宽的平滑曲率，避免逐点扭转（旧版每采样点最多跳 0.38rad）
+    var bankC = smoothLoop(curv, QQ.BANK_SMOOTH, 3);
+    for (var ib = 0; ib < M; ib++) pts[ib].bank = clamp(-bankC[ib] * QQ.BANK_GAIN, -QQ.BANK_MAX, QQ.BANK_MAX);
+    var bk = smoothLoop(pts.map(function (p) { return p.bank; }), 4, 2);
+    for (var ib2 = 0; ib2 < M; ib2++) pts[ib2].bank = bk[ib2];
     for (var i5 = 0; i5 < nK; i5++) {
       if (!knots[i5].jump) continue;
       var best = 1e18, bi = 0;
@@ -439,7 +485,7 @@
           p.pad = false;
         } else {
           var u3 = (k3 - 12) / 6;
-          p.y += (ramp - drop) * (1 - u3);
+          p.y += (ramp - drop) * (1 - u3 * u3 * (3 - 2 * u3));
         }
       }
     }
